@@ -8,10 +8,71 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
-
 	"github.com/tidwall/gjson"
 )
+
+
+// https://stackoverflow.com/questions/36773837/best-way-to-use-http-client-in-a-concurrent-application
+var httpClientsPool = sync.Pool{
+	New: func() any { return &http.Client{} }}
+
+const baseUrl = "https://en.wikipedia.org/api/rest_v1/feed/onthisday/"
+
+func init() {
+	httpClientsPool.Put(&http.Client{})
+	httpClientsPool.Put(&http.Client{})
+	httpClientsPool.Put(&http.Client{})
+	httpClientsPool.Put(&http.Client{})
+	httpClientsPool.Put(&http.Client{})
+}
+
+func FetchIncidentFromWikipedia(incidentChannel chan <- []*models.Incident, incidentType models.IncidentType, dayOfYear uint) {
+
+	// https://stackoverflow.com/questions/62018471/why-does-golang-strings-builder-implements-string-like-this
+	urlBuilder := strings.Builder{}
+	urlBuilder.WriteString(baseUrl)
+
+	// Get the day and the month
+	month, day, err := GetDayMonthFromYearDay(dayOfYear)
+
+	if err != nil {
+		log.Printf("failed to convert the day of the year into month and day reason: %s", err.Error())
+	}
+
+	// What is the type of the event?
+	switch incidentType {
+	case models.Event:
+		urlBuilder.WriteString("events")
+	case models.Birth:
+		urlBuilder.WriteString("births")
+	case models.Death:
+		urlBuilder.WriteString("deaths")
+	case models.Holidays:
+		urlBuilder.WriteString("holidays")
+	}
+
+	urlBuilder.WriteString(fmt.Sprintf("/%d/%d", month, day))
+
+	// https://stackoverflow.com/questions/38673673/access-http-response-as-string-in-go
+	httpClient := http.Client{}
+
+	wikipediaResponse, err := httpClient.Get(urlBuilder.String())
+	if err != nil {
+		log.Printf("failed to fetch response from Wikipedia API, reason: %s", err)
+	}
+	defer wikipediaResponse.Body.Close()
+
+	wikipediaBytesResponse, err := io.ReadAll(wikipediaResponse.Body)
+	if err != nil {
+		log.Printf("failed to parse the response into bytes, reason %v\n", err.Error())
+	}
+
+	parsedIncidents := ParseWikipediaResponseToIncidents(string(wikipediaBytesResponse), incidentType)
+
+	incidentChannel <- parsedIncidents
+
+	log.Println("Finished writing on channel, exiting function")
+}
 
 func ParseWikipediaResponseToIncidents(jsonBlob string, incidentType models.IncidentType) []*models.Incident {
 
@@ -33,9 +94,7 @@ func ParseWikipediaResponseToIncidents(jsonBlob string, incidentType models.Inci
 		}
 
 		incidents = append(incidents, incident)
-		// log.Printf("%s", incident)
 	}
-	// return &models.Incident{Summary: r.Get("text").Str}
 	return incidents
 }
 
@@ -63,7 +122,7 @@ func GetDayMonthFromYearDay(dayInYear uint) (month uint, day uint, err error) {
 		return 7, (dayInYear - cumulativeDaysAtEndOfMonths[6]), nil
 	case 213 <= dayInYear && dayInYear < 244:
 		return 8, (dayInYear - cumulativeDaysAtEndOfMonths[7]), nil
-	case 244 < dayInYear && dayInYear < 274:
+	case 244 <= dayInYear && dayInYear < 274:
 		return 9, (dayInYear - cumulativeDaysAtEndOfMonths[8]), nil
 	case 274 <= dayInYear && dayInYear < 305:
 		return 10, (dayInYear - cumulativeDaysAtEndOfMonths[9]), nil

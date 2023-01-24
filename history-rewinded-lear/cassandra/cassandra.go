@@ -2,10 +2,13 @@ package cassandra
 
 import (
 	"crypto/tls"
+	"fmt"
 	"github.com/stargate/stargate-grpc-go-client/stargate/pkg/auth"
 	"github.com/stargate/stargate-grpc-go-client/stargate/pkg/client"
+	datastax "github.com/stargate/stargate-grpc-go-client/stargate/pkg/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"history-rewinded-lear/models"
 	"log"
 	"os"
 	"sync"
@@ -40,11 +43,69 @@ var clientPool = sync.Pool{
 // Initially, the pool will be having three clients so that it can be used, more will be created if needed
 func init() {
 	stargateClient1 := clientPool.New().(*client.StargateClient)
-	clientPool.Put(stargateClient1)
-
+	defer clientPool.Put(stargateClient1)
 	stargateClient2 := clientPool.New().(*client.StargateClient)
-	clientPool.Put(stargateClient2)
-
+	defer clientPool.Put(stargateClient2)
 	stargateClient3 := clientPool.New().(*client.StargateClient)
-	clientPool.Put(stargateClient3)
+	defer clientPool.Put(stargateClient3)
+
+	synchronizerChan := make(chan interface{})
+
+	go func() {
+		stargateClient1.ExecuteQuery(&datastax.Query{
+			Cql: "CREATE KEYSPACE IF NOT EXISTS lear WITH replication = {'class': 'NetworkTopologyStrategy', 'europe-west1': '3'}  AND durable_writes = true;"},
+		)
+		close(synchronizerChan)
+	}()
+
+	// Design decision: Create four tables for
+	go func() {
+		<- synchronizerChan
+		stargateClient1.ExecuteBatch(&datastax.Batch{
+			Type: datastax.Batch_LOGGED,
+			Queries: []*datastax.BatchQuery{
+				{
+					Cql: `CREATE TABLE IF NOT EXISTS lear.incidents (
+					  incident_id uuid, summary text, incident_in_detail text, year int, month int, day int,
+					  PRIMARY KEY (incident_id, year, month, day)
+					  WITH CLUSTERING ORDER BY (year DESC, month ASC, day ASC);
+					`,
+				},
+				{
+					Cql: `CREATE TABLE IF NOT EXISTS lear.births (
+					  incident_id uuid, summary text, incident_in_detail text, year int, month int, day int,
+					  PRIMARY KEY (incident_id, year, month, day)
+					  WITH CLUSTERING ORDER BY (year DESC, month ASC, day ASC);
+					`,
+				},
+			},
+		},
+		)
+	}()
+
+	// Create the set of tables required the languages
+   go func() {
+	<- synchronizerChan	
+	stargateClient2.ExecuteBatch(&datastax.Batch{
+		Type: datastax.Batch_LOGGED,
+		Queries: []*datastax.BatchQuery{
+			{
+				Cql: `CREATE TABLE IF NOT EXISTS lear.deaths (
+					  incident_id uuid, summary text, incident_in_detail text, year int, month int, day int,
+					  PRIMARY KEY (incident_id, year, month, day)
+					  WITH CLUSTERING ORDER BY (year DESC, month ASC, day ASC);
+					`,
+			},
+			{
+				Cql: `CREATE TABLE IF NOT EXISTS lear.holidays (
+					  incident_id uuid, summary text, incident_in_detail text, year int, month int, day int,
+					  PRIMARY KEY (incident_id, year, month, day)
+					  WITH CLUSTERING ORDER BY (year DESC, month ASC, day ASC);
+					`,
+			},
+		},
+	},
+	)
+   }()
 }
+

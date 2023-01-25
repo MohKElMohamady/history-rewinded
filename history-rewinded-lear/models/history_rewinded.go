@@ -12,6 +12,21 @@ const (
 	Holidays
 )
 
+func (iT IncidentType) String() string {
+	switch iT {
+	case Event:
+		return "Event"	
+	case Birth:
+		return "Birth"
+	case Death:
+		return "Death"
+	case Holidays:
+		return "Holidays"
+	default:
+		return ""
+	}
+}
+
 type Incident struct {
 	Summary          string
 	IncidentType     IncidentType

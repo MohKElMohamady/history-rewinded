@@ -105,7 +105,7 @@ var cumulativeDaysAtEndOfMonths = [12]uint{
 func GetDayMonthFromYearDay(dayInYear uint) (month uint, day uint, err error) {
 
 	switch {
-
+		
 	case 1 <= dayInYear && dayInYear < 32:
 		return 1, dayInYear, nil
 	case 32 <= dayInYear && dayInYear < 60:
@@ -133,5 +133,35 @@ func GetDayMonthFromYearDay(dayInYear uint) (month uint, day uint, err error) {
 	default:
 		return 0, 0, fmt.Errorf("failed to parsed the month and day from %d", dayInYear)
 	}
+}
 
+func GetDayOfYearFromDayAndMonth(month uint, day uint) (dayOfYear uint, err error) {
+	switch {
+	case month == 1:
+		return day, nil
+	case month == 2:
+		return day + cumulativeDaysAtEndOfMonths[1], nil
+	case month == 3:
+		return day + cumulativeDaysAtEndOfMonths[2], nil
+	case month == 4:
+		return day + cumulativeDaysAtEndOfMonths[3], nil
+	case month == 5:
+		return day + cumulativeDaysAtEndOfMonths[4], nil
+	case month == 6:
+		return day + cumulativeDaysAtEndOfMonths[5], nil
+	case month == 7:
+		return day + cumulativeDaysAtEndOfMonths[6], nil
+	case month == 8:
+		return day + cumulativeDaysAtEndOfMonths[7], nil
+	case month == 9:
+		return day + cumulativeDaysAtEndOfMonths[8], nil
+	case month == 10:
+		return day + cumulativeDaysAtEndOfMonths[9], nil
+	case month == 11:
+		return day + cumulativeDaysAtEndOfMonths[10], nil
+	case month == 12:
+		return day + cumulativeDaysAtEndOfMonths[11], nil
+	default: 
+		return 0, fmt.Errorf("failed to get the day of the year for the month %v and day %v", month, day)
+	} 
 }

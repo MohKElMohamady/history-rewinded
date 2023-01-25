@@ -61,7 +61,7 @@ func init() {
 	// Design decision: Create four tables for
 	go func() {
 		<- synchronizerChan
-		stargateClient1.ExecuteBatch(&datastax.Batch{
+		stargateClient2.ExecuteBatch(&datastax.Batch{
 			Type: datastax.Batch_LOGGED,
 			Queries: []*datastax.BatchQuery{
 				{
@@ -86,7 +86,7 @@ func init() {
 	// Create the set of tables required the languages
    go func() {
 	<- synchronizerChan	
-	stargateClient2.ExecuteBatch(&datastax.Batch{
+	stargateClient3.ExecuteBatch(&datastax.Batch{
 		Type: datastax.Batch_LOGGED,
 		Queries: []*datastax.BatchQuery{
 			{
@@ -109,3 +109,44 @@ func init() {
    }()
 }
 
+type CassandraRepository interface {
+	FetchIncidentsOnThisDay(day uint, month uint) ([]models.Incident, error)
+	FetchBirthsOnThisDay(day uint, month uint) ([]models.Incident, error)
+	FetchDeathsOnThisDay(day uint, month uint) ([]models.Incident, error)
+	FetchHolidaysOnThisDay(day uint, month uint) ([]models.Incident, error)
+	AddIncident(incident models.Incident) (models.Incident, error)
+	BulkInsertIncidents(incidents models.Incident) ([]models.Incident, error)
+}
+
+type CassandraClient struct {
+}
+
+func (c *CassandraClient) FetchIncidentsOnThisDay(day uint, month uint) ([]models.Incident, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *CassandraClient) FetchBirthsOnThisDay(day uint, month uint) ([]models.Incident, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *CassandraClient) FetchDeathsOnThisDay(day uint, month uint) ([]models.Incident, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models.Incident, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *CassandraClient) AddIncident(incident models.Incident) (models.Incident, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *CassandraClient) BulkInsertIncidents(incidents models.Incident) ([]models.Incident, error) {
+	//TODO implement me
+	panic("implement me")
+}

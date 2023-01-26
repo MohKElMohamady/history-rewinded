@@ -148,8 +148,40 @@ func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models
 }
 
 func (c *CassandraClient) AddIncident(incident models.Incident) (models.Incident, error) {
-	//TODO implement me
-	panic("implement me")
+
+	stargate := clientPool.Get().(*client.StargateClient)
+	switch {
+	case time.Now().Year()<= incident.Year :
+		return nil, fmt.Errorf("the event cannot be in the future, the year value is %v", incident.Month)
+	case incident.Month <= 0 || incident.Month > 12:
+		return nil, fmt.Errorf("the month cannot be less than 1 as it has the value %v", incident.Month)
+	case incident.Day <= 0 || incident.Month > 31:
+		return nil, fmt.Errorf("the day cannot be less than 1 as it has the value %v", incident.Day)
+	case incident.Summary == "":
+		return nil, errors.New("the incident summary cannot be empty")
+	case incident.IncidentInDetail == "":
+		return nil, errors.New("the incident summary cannot be empty")
+	case incident.IncidentType != models.Event || incident.IncidentType != models.Birth ||incident.IncidentType != models.Death || incident.IncidentType != models.Holiday :
+		return nil, errors.New("unknown incident type")
+	default:
+		break
+	}
+
+	_, err := stargate.ExecuteQuery(&datastax.Query{
+		Cql: "INSERT INTO lear.incidents (incident_id , year , month , day , summary , incident_in_detail ) VALUES ( uuid(), ?, ?, ?, ?, ?);",
+		Values: &datastax.Values{Values: []*datastax.Value{
+			&datastax.Value{Inner: &datastax.Value_Int{Int: int64(incident.Year)}},
+			&datastax.Value{Inner: &datastax.Value_Int{int64(incident.Month)}},
+			&datastax.Value{Inner: &datastax.Value_Int{int64(incident.Day)}},
+			&datastax.Value{Inner: &datastax.Value_String_{String_:incident.Summary}},
+			&datastax.Value{Inner: &datastax.Value_String_{String_:incident.IncidentInDetail}},
+		}},
+	})
+	if err != nil {
+		log.Printf("error, unable to insert incident into its table, reason: %v ", err.Error())
+	}
+
+	return incident, nil
 }
 
 func (c *CassandraClient) BulkInsertIncidents(incidents models.Incident) ([]models.Incident, error) {

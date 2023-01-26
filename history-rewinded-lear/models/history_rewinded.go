@@ -9,7 +9,7 @@ const (
 	Event IncidentType = iota
 	Birth
 	Death
-	Holidays
+	Holiday
 )
 
 func (iT IncidentType) String() string {
@@ -20,8 +20,8 @@ func (iT IncidentType) String() string {
 		return "Birth"
 	case Death:
 		return "Death"
-	case Holidays:
-		return "Holidays"
+	case Holiday:
+		return "Holiday"
 	default:
 		return ""
 	}

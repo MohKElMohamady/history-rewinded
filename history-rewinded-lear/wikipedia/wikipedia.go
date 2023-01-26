@@ -47,7 +47,7 @@ func FetchIncidentFromWikipedia(incidentChannel chan <- []*models.Incident, inci
 		urlBuilder.WriteString("births")
 	case models.Death:
 		urlBuilder.WriteString("deaths")
-	case models.Holidays:
+	case models.Holiday:
 		urlBuilder.WriteString("holidays")
 	}
 

@@ -4,8 +4,8 @@ option go_package = "../pb";
 
 
 service Lear {
-  rpc FetchEventsOn(FetchIncidentRequest) returns (stream Incident);
   rpc FetchIncidentsOn(FetchIncidentRequest) returns (stream Incident);
+  rpc FetchEventsOn(FetchIncidentRequest) returns (stream Incident);
   rpc FetchBirthsOn(FetchIncidentRequest) returns (stream Incident);
   rpc FetchDeathsOn(FetchIncidentRequest) returns (stream Incident);
   rpc FetchHolidaysOn(FetchIncidentRequest) returns (stream Incident);

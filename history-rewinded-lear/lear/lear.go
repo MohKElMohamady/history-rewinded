@@ -1,30 +1,47 @@
 package lear
 
 import (
+	"history-rewinded-lear/cassandra"
 	"history-rewinded-lear/models"
 	"history-rewinded-lear/wikipedia"
+	"history-rewinded-regan/pb"
 	"log"
 	"sync"
 	"sync/atomic"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type lear struct {
+	pb.UnimplementedLearServer
+	c cassandra.CassandraClient
 }
 
-func New() *lear {
-	return &lear{}
+func New() lear {
+ 	king_lear := lear{
+		c: cassandra.CassandraClient{},
+	} 
+	king_lear.FetchAllIncidents()
+	 return king_lear 
 }
 
 func (l *lear) FetchAllIncidents() {
-
+	incidentsSynchronizer := sync.WaitGroup{}
 	eventsChannel := make(chan []*models.Incident)
 	// birthsChannel := make(chan models.Incident)
 	// deathsChannel := make(chan models.Incident)
 	// holidaysChannel := make(chan models.Incident)
 
+	incidentsSynchronizer.Add(1)
 	go l.fetchAllEvents(eventsChannel)
+
+	// incidentsSynchronizer.Add(1)
 	//	go l.fetchAllBirths(birthsChannel)
+	
+	// incidentsSynchronizer.Add(1)
 	//	go l.fetchAllDeaths(deathsChannel)
+
+	// incidentsSynchronizer.Add(1)
 	//	go l.fetchAllHolidays(holidaysChannel)
 
 	// select {
@@ -37,12 +54,15 @@ func (l *lear) FetchAllIncidents() {
 	// case holiday := <- holidaysChannel:
 	// 	fmt.Printf("%s", holiday)
 	// }
-	for incidents := range eventsChannel {
-		for _ = range incidents {
-			// log.Println("Something")
-			// log.Printf("from channel printer %v", incident)
+
+	go func() {
+		for incidents := range eventsChannel {
+		for _, _ = range incidents {
 		}
-	}
+		log.Println("Completed fetching all events and saved them")
+		}
+	}()
+
 }
 
 /*
@@ -63,31 +83,32 @@ func (l *lear) fetchAllEvents(fanInEventsChannel chan<- []*models.Incident) {
 	var totalEvents int64
 	for i, incidentsChannel := range threeHundredSixtyFiveChannels {
 
-
 		dayOfYear := i + 1
 
-			go wikipedia.FetchIncidentFromWikipedia(incidentsChannel, models.Event, uint(dayOfYear))
+		go wikipedia.FetchIncidentFromWikipedia(incidentsChannel, models.Event, uint(dayOfYear))
 
-			log.Println(incidentsChannel)
-
-			go func(incidentsChannel * chan []*models.Incident) {
-				for incidents := range *incidentsChannel {
-					log.Printf("%v", len(incidents))
-					for _, incident := range incidents {
-						atomic.AddInt64(&totalEvents, 1)
-						log.Println(incident)
-					}
-					fanInEventsChannel <- incidents
+		go func(incidentsChannel chan []*models.Incident) {
+			defer waitGroupEvents.Done()
+			for incidents := range incidentsChannel {
+				for _, incident := range incidents {
+					atomic.AddInt64(&totalEvents, 1)
+					//It is faster to persist the incident right after parsing it, rather than waiting for it to be done by the fanning in channel
+					l.c.AddIncident(*incident)
+					log.Println(incident)
 				}
-				defer waitGroupEvents.Done()
-			}(&incidentsChannel)
+				atomic.AddInt64(&totalEvents, 1)
+				fanInEventsChannel <- incidents
+			}
+		}(incidentsChannel)
+
 
 	}
 
-		log.Println(totalEvents)
 	go func() {
+		defer close(fanInEventsChannel)
 		waitGroupEvents.Wait()
-		close(fanInEventsChannel)
+		//TODO: Calculate the hash out of all the events periodically every day and compare them with the database to know if the API has updated its information
+		log.Printf("The total number of fetched events from the On This Day Wikipedia API is %d\n", totalEvents)
 	}()
 
 }
@@ -134,3 +155,38 @@ func (l *lear) fetchAllEvents(fanInEventsChannel chan<- []*models.Incident) {
 // 	}
 // 	close(holidaysChannel)
 // }
+
+func (l *lear) FetchIncidentsOn(*pb.FetchIncidentRequest, pb.Lear_FetchIncidentsOnServer) error {
+	return status.Errorf(codes.Unimplemented, "method FetchIncidentsOn not implemented")
+}
+
+func (l *lear) FetchEventsOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchEventsOnServer) error {
+
+	events, err := l.c.FetchEventsOnThisDay(uint(req.Day), uint(req.Month))	
+	if err != nil {
+		return err
+	}
+
+	for _, e := range events {
+		server.Send(&pb.Incident{
+			IncidentType: pb.IncidentType_INCIDENT_TYPE_EVENT,
+			Day: e.Day,
+			Month: e.Month,
+			Year: e.Year,
+			Summary: e.Summary,
+			IncidentInDetail: e.IncidentInDetail,
+		})
+	}
+	
+	return nil
+}
+
+func (l *lear) FetchBirthsOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchBirthsOnServer) error {
+	return status.Errorf(codes.Unimplemented, "method FetchBirthsOn not implemented")
+}
+func (l *lear) FetchDeathsOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchDeathsOnServer) error {
+	return status.Errorf(codes.Unimplemented, "method FetchDeathsOn not implemented")
+}
+func (l *lear) FetchHolidaysOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchHolidaysOnServer) error {
+	return status.Errorf(codes.Unimplemented, "method FetchHolidaysOn not implemented")
+}

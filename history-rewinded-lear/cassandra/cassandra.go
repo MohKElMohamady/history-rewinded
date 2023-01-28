@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"crypto/tls"
+	"sync/atomic"
 	"errors"
 	"fmt"
 	"history-rewinded-lear/models"
@@ -19,7 +20,7 @@ import (
 
 var remoteCassandraUri string
 var remoteCassandraBearerToken string
-
+var allocatedConnectionsToCassandra int64
 var clientPool = sync.Pool{
 
 	New: func() any {
@@ -31,16 +32,21 @@ var clientPool = sync.Pool{
 			grpc.FailOnNonTempDialError(true),
 			grpc.WithPerRPCCredentials(auth.NewStaticTokenProvider(remoteCassandraBearerToken)),
 		)
-
+		atomic.AddInt64(&allocatedConnectionsToCassandra, 1)
 		if err != nil {
-			log.Fatalf("failed to connect to the remote cassandra instance, reason: %w", err)
-			return nil
+			log.Fatalf("failed to connect to the remote cassandra instance, reason: %v\n", err)
 		}
 
 		stargateClient, err := client.NewStargateClientWithConn(conn)
+		if err != nil {
+			log.Fatalf("failed to create instance of stargate client, reason: %v\n", err.Error())
+		}
+
+		log.Println("The total number of created instances is", allocatedConnectionsToCassandra)
 
 		return stargateClient
 	},
+
 }
 
 // Initially, the pool will be having three clients so that it can be used, more will be created if needed
@@ -146,7 +152,7 @@ func (c *CassandraClient) FetchEventsOnThisDay(day uint, month uint) ([]models.I
 
 	resp, err := stargateClient.ExecuteQuery(fetchIncidentQuery)
 	if err != nil {
-		fmt.Printf("failed to fetch results from remote cassandra instance, reason %v", err.Error())
+		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
 
 	incidents := []models.Incident{}
@@ -170,7 +176,7 @@ func (c *CassandraClient) FetchBirthsOnThisDay(day uint, month uint) ([]models.I
 	stargateClient := clientPool.Get().(*client.StargateClient)
 	defer clientPool.Put(stargateClient)
 	fetchIncidentQuery := &datastax.Query{
-		Cql: "SELECT year, summary, incident_in_summary FROM lear.incidents WHERE day = ? AND month = ?",
+		Cql: "SELECT year, summary, incident_in_summary FROM lear.births WHERE day = ? AND month = ?",
 		Values: &datastax.Values{
 			Values: []*datastax.Value{
 				{
@@ -185,7 +191,7 @@ func (c *CassandraClient) FetchBirthsOnThisDay(day uint, month uint) ([]models.I
 
 	resp, err := stargateClient.ExecuteQuery(fetchIncidentQuery)
 	if err != nil {
-		fmt.Printf("failed to fetch results from remote cassandra instance, reason %v", err.Error())
+		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
 
 	incidents := []models.Incident{}
@@ -209,7 +215,7 @@ func (c *CassandraClient) FetchDeathsOnThisDay(day uint, month uint) ([]models.I
 	stargateClient := clientPool.Get().(*client.StargateClient)
 	defer clientPool.Put(stargateClient)
 	fetchIncidentQuery := &datastax.Query{
-		Cql: "SELECT year, summary, incident_in_summary FROM lear.incidents WHERE day = ? AND month = ?",
+		Cql: "SELECT year, summary, incident_in_summary FROM lear.deaths WHERE day = ? AND month = ?",
 		Values: &datastax.Values{
 			Values: []*datastax.Value{
 				{
@@ -224,7 +230,7 @@ func (c *CassandraClient) FetchDeathsOnThisDay(day uint, month uint) ([]models.I
 
 	resp, err := stargateClient.ExecuteQuery(fetchIncidentQuery)
 	if err != nil {
-		fmt.Printf("failed to fetch results from remote cassandra instance, reason %v", err.Error())
+		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
 
 	incidents := []models.Incident{}
@@ -248,7 +254,7 @@ func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models
 	stargateClient := clientPool.Get().(*client.StargateClient)
 	defer clientPool.Put(stargateClient)
 	fetchIncidentQuery := &datastax.Query{
-		Cql: "SELECT year, summary, incident_in_summary FROM lear.incidents WHERE day = ? AND month = ?",
+		Cql: "SELECT year, summary, incident_in_summary FROM lear.holidays WHERE day = ? AND month = ?",
 		Values: &datastax.Values{
 			Values: []*datastax.Value{
 				{
@@ -263,7 +269,7 @@ func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models
 
 	resp, err := stargateClient.ExecuteQuery(fetchIncidentQuery)
 	if err != nil {
-		fmt.Printf("failed to fetch results from remote cassandra instance, reason %v", err.Error())
+		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
 
 	incidents := []models.Incident{}
@@ -285,7 +291,18 @@ func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models
 
 func (c *CassandraClient) AddIncident(incident models.Incident) (models.Incident, error) {
 
-	stargate := clientPool.Get().(*client.StargateClient)
+	var stargate *client.StargateClient
+
+	func() {
+		stargate = clientPool.Get().(*client.StargateClient)	
+		atomic.AddInt64(&allocatedConnectionsToCassandra, 1)	
+	}()
+	
+	defer func() {
+		clientPool.Put(stargate)
+		atomic.AddInt64(&allocatedConnectionsToCassandra, -1)	
+	}()
+	
 	switch {
 	case int64(time.Now().Year())<= incident.Year :
 		return models.Incident{}, fmt.Errorf("the event cannot be in the future, the year value is %v", incident.Month)
@@ -302,7 +319,6 @@ func (c *CassandraClient) AddIncident(incident models.Incident) (models.Incident
 	default:
 		break
 	}
-
 	_, err := stargate.ExecuteQuery(&datastax.Query{
 		Cql: "INSERT INTO lear.incidents (day, month, year , summary , incident_in_detail ) VALUES ( ?, ?, ?, ?, ? );",
 		Values: &datastax.Values{Values: []*datastax.Value{
@@ -314,7 +330,7 @@ func (c *CassandraClient) AddIncident(incident models.Incident) (models.Incident
 		}},
 	})
 	if err != nil {
-		log.Printf("error, unable to insert incident into its table, reason: %v ", err.Error())
+		log.Fatalf("error, unable to insert incident into its table, reason: %v\n", err.Error())
 	}
 
 	return incident, nil

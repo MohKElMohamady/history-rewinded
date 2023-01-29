@@ -1,6 +1,8 @@
 package lear
 
 import (
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"history-rewinded-lear/cassandra"
 	"history-rewinded-lear/models"
 	"history-rewinded-lear/wikipedia"
@@ -8,21 +10,19 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type lear struct {
-	pb.UnimplementedLearServer
 	c cassandra.CassandraClient
+	pb.UnimplementedLearServer
 }
 
 func New() lear {
- 	king_lear := lear{
+	kingLear := lear{
 		c: cassandra.CassandraClient{},
-	} 
-	king_lear.FetchAllIncidents()
-	 return king_lear 
+	}
+	kingLear.FetchAllIncidents()
+	return kingLear
 }
 
 func (l *lear) FetchAllIncidents() {
@@ -37,7 +37,7 @@ func (l *lear) FetchAllIncidents() {
 
 	// incidentsSynchronizer.Add(1)
 	//	go l.fetchAllBirths(birthsChannel)
-	
+
 	// incidentsSynchronizer.Add(1)
 	//	go l.fetchAllDeaths(deathsChannel)
 
@@ -57,9 +57,9 @@ func (l *lear) FetchAllIncidents() {
 
 	go func() {
 		for incidents := range eventsChannel {
-		for _, _ = range incidents {
-		}
-		log.Println("Completed fetching all events and saved them")
+			for _, _ = range incidents {
+			}
+			log.Println("Completed fetching all events and saved them")
 		}
 	}()
 
@@ -100,7 +100,6 @@ func (l *lear) fetchAllEvents(fanInEventsChannel chan<- []*models.Incident) {
 				fanInEventsChannel <- incidents
 			}
 		}(incidentsChannel)
-
 
 	}
 
@@ -162,31 +161,87 @@ func (l *lear) FetchIncidentsOn(*pb.FetchIncidentRequest, pb.Lear_FetchIncidents
 
 func (l *lear) FetchEventsOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchEventsOnServer) error {
 
-	events, err := l.c.FetchEventsOnThisDay(uint(req.Day), uint(req.Month))	
+	events, err := l.c.FetchEventsOnThisDay(uint(req.Day), uint(req.Month))
 	if err != nil {
 		return err
 	}
 
 	for _, e := range events {
 		server.Send(&pb.Incident{
-			IncidentType: pb.IncidentType_INCIDENT_TYPE_EVENT,
-			Day: e.Day,
-			Month: e.Month,
-			Year: e.Year,
-			Summary: e.Summary,
+			IncidentType:     pb.IncidentType_INCIDENT_TYPE_EVENT,
+			Day:              e.Day,
+			Month:            e.Month,
+			Year:             e.Year,
+			Summary:          e.Summary,
 			IncidentInDetail: e.IncidentInDetail,
 		})
 	}
-	
+
 	return nil
+
 }
 
 func (l *lear) FetchBirthsOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchBirthsOnServer) error {
-	return status.Errorf(codes.Unimplemented, "method FetchBirthsOn not implemented")
+
+	events, err := l.c.FetchBirthsOnThisDay(uint(req.Day), uint(req.Month))
+	if err != nil {
+		return err
+	}
+
+	for _, e := range events {
+		server.Send(&pb.Incident{
+			IncidentType:     pb.IncidentType_INCIDENT_TYPE_BIRTH,
+			Day:              e.Day,
+			Month:            e.Month,
+			Year:             e.Year,
+			Summary:          e.Summary,
+			IncidentInDetail: e.IncidentInDetail,
+		})
+	}
+
+	return nil
+
 }
 func (l *lear) FetchDeathsOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchDeathsOnServer) error {
-	return status.Errorf(codes.Unimplemented, "method FetchDeathsOn not implemented")
+
+	events, err := l.c.FetchDeathsOnThisDay(uint(req.Day), uint(req.Month))
+	if err != nil {
+		return err
+	}
+
+	for _, e := range events {
+		server.Send(&pb.Incident{
+			IncidentType:     pb.IncidentType_INCIDENT_TYPE_DEATH,
+			Day:              e.Day,
+			Month:            e.Month,
+			Year:             e.Year,
+			Summary:          e.Summary,
+			IncidentInDetail: e.IncidentInDetail,
+		})
+	}
+
+	return nil
+
 }
 func (l *lear) FetchHolidaysOn(req *pb.FetchIncidentRequest, server pb.Lear_FetchHolidaysOnServer) error {
-	return status.Errorf(codes.Unimplemented, "method FetchHolidaysOn not implemented")
+
+	events, err := l.c.FetchHolidaysOnThisDay(uint(req.Day), uint(req.Month))
+	if err != nil {
+		return err
+	}
+
+	for _, e := range events {
+
+		server.Send(&pb.Incident{
+			IncidentType:     pb.IncidentType_INCIDENT_TYPE_HOLIDAY,
+			Day:              e.Day,
+			Month:            e.Month,
+			Year:             e.Year,
+			Summary:          e.Summary,
+			IncidentInDetail: e.IncidentInDetail,
+		})
+	}
+
+	return nil
+
 }

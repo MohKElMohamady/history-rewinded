@@ -50,7 +50,7 @@ func init() {
 
 	go func() {
 		client1.ExecuteQuery(&datastax.Query{
-			Cql: `	CREATE TABLE IF NOT EXISTS cordelia.successful_tweets_by_id (tweeted_on int PRIMARY, tweet_id int, tweet_text text);`,
+			Cql: `	CREATE TABLE IF NOT EXISTS cordelia.successful_tweets_by_id (tweeted_on int PRIMARY KEY, tweet_id int, tweet_text text);`,
 		})
 	}()
 	
@@ -70,4 +70,49 @@ type CassandraRepository interface {
 }
 
 type CassandraClient struct {
+}
+
+func (c *CassandraClient) SaveSuccessfulTweet(t twitter.Tweet) error {
+
+	stargate := clientPool.Get().(*client.StargateClient)
+	defer clientPool.Put(stargate)
+
+	_, err := stargate.ExecuteQuery(&datastax.Query{
+		Cql: "INSERT INTO cordelia.successful_tweets_by_id (tweeted_on, id, text) VALUES (?, ?, ?)",
+		Values: &datastax.Values{
+			Values: []*datastax.Value{
+				{Inner: &datastax.Value_Int{Int: time.Now().Unix()}},
+				{Inner: &datastax.Value_Int{Int: int64(t.TweetId)}},
+				{Inner: &datastax.Value_String_{String_: t.Text}},
+			}},
+	})
+	if err != nil {
+		log.Printf("failed to save the tweet in the database, reason:%s\n", err.Error())
+	}
+
+	return nil
+
+}
+
+func (c *CassandraClient) SaveUnSuccessfulTweet(t twitter.TweetStatus) error {
+
+	stargate := clientPool.Get().(*client.StargateClient)
+	defer clientPool.Put(stargate)
+
+	_, err := stargate.ExecuteQuery(&datastax.Query{
+		Cql: "INSERT INTO cordelia.unsuccessful_tweets_by_timestamp (attempted_to_tweet_on, status_code, reason, serialized_headers) VALUES (?, ?, ?, ?)",
+		Values: &datastax.Values{
+			Values: []*datastax.Value{
+				{Inner: &datastax.Value_Int{Int: time.Now().Unix()}},
+				{Inner: &datastax.Value_Int{Int: int64(t.StatusCode)}},
+				{Inner: &datastax.Value_String_{String_: t.Reason}},
+				{Inner: &datastax.Value_String_{String_: t.SerializedHeaders}},
+			}},
+	})
+	if err != nil {
+		log.Printf("failed to save the unsuccessful tweet in the database, reason:%s\n", err.Error())
+	}
+
+	return nil
+
 }

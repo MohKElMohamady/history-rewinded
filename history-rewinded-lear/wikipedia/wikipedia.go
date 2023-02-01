@@ -2,15 +2,14 @@ package wikipedia
 
 import (
 	"fmt"
+	"github.com/tidwall/gjson"
 	"history-rewinded-lear/models"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
-	"github.com/tidwall/gjson"
 )
-
 
 // https://stackoverflow.com/questions/36773837/best-way-to-use-http-client-in-a-concurrent-application
 var httpClientsPool = sync.Pool{
@@ -26,7 +25,9 @@ func init() {
 	httpClientsPool.Put(&http.Client{})
 }
 
-func FetchIncidentFromWikipedia(incidentChannel chan <- []*models.Incident, incidentType models.IncidentType, dayOfYear uint) {
+func FetchIncidentFromWikipedia(incidentChannel chan<- []*models.Incident, incidentType models.IncidentType, dayOfYear uint) {
+
+	defer close(incidentChannel)
 
 	// https://stackoverflow.com/questions/62018471/why-does-golang-strings-builder-implements-string-like-this
 	urlBuilder := strings.Builder{}
@@ -67,19 +68,20 @@ func FetchIncidentFromWikipedia(incidentChannel chan <- []*models.Incident, inci
 		log.Printf("failed to parse the response into bytes, reason %v\n", err.Error())
 	}
 
-	parsedIncidents := ParseWikipediaResponseToIncidents(string(wikipediaBytesResponse), incidentType)
+	parsedIncidents := ParseWikipediaResponseToIncidents(string(wikipediaBytesResponse), day, month, incidentType)
+	log.Println(parsedIncidents)
 
 	incidentChannel <- parsedIncidents
 
-	log.Println("Finished writing on channel, exiting function")
+	log.Println("Successfully fetched and parsed the event from Wikipedia and sent it on the channel, exiting")
 }
 
-func ParseWikipediaResponseToIncidents(jsonBlob string, incidentType models.IncidentType) []*models.Incident {
+func ParseWikipediaResponseToIncidents(jsonBlob string, day, month uint, incidentType models.IncidentType) []*models.Incident {
 
 	var incidents []*models.Incident
 
 	// https://mholt.github.io/json-to-go/
-	parsedJsonIncidents := gjson.Parse(jsonBlob).Array()[0].Get("events").Array()
+	parsedJsonIncidents := gjson.Parse(jsonBlob).Array()[0].Get(incidentType.String() + "s").Array()
 	for _, r := range parsedJsonIncidents {
 
 		incidentSummary := r.Get("text").Str
@@ -87,10 +89,12 @@ func ParseWikipediaResponseToIncidents(jsonBlob string, incidentType models.Inci
 		incidentYear := r.Get("year").Int()
 
 		incident := &models.Incident{
+			Day:              int64(day),
+			Month:            int64(month),
+			Year:             incidentYear,
 			Summary:          incidentSummary,
 			IncidentType:     incidentType,
 			IncidentInDetail: incidentInDetail,
-			Year:             int(incidentYear),
 		}
 
 		incidents = append(incidents, incident)
@@ -105,7 +109,7 @@ var cumulativeDaysAtEndOfMonths = [12]uint{
 func GetDayMonthFromYearDay(dayInYear uint) (month uint, day uint, err error) {
 
 	switch {
-		
+
 	case 1 <= dayInYear && dayInYear < 32:
 		return 1, dayInYear, nil
 	case 32 <= dayInYear && dayInYear < 60:
@@ -161,7 +165,7 @@ func GetDayOfYearFromDayAndMonth(month uint, day uint) (dayOfYear uint, err erro
 		return day + cumulativeDaysAtEndOfMonths[10], nil
 	case month == 12:
 		return day + cumulativeDaysAtEndOfMonths[11], nil
-	default: 
+	default:
 		return 0, fmt.Errorf("failed to get the day of the year for the month %v and day %v", month, day)
-	} 
+	}
 }

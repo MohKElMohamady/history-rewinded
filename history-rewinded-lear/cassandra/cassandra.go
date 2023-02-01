@@ -1,21 +1,22 @@
 package cassandra
 
 import (
+	"context"
 	"crypto/tls"
-	"sync/atomic"
-	"errors"
 	"fmt"
-	"history-rewinded-lear/models"
-	"log"
-	"os"
-	"sync"
-	"time"
 	"github.com/joho/godotenv"
 	"github.com/stargate/stargate-grpc-go-client/stargate/pkg/auth"
 	"github.com/stargate/stargate-grpc-go-client/stargate/pkg/client"
 	datastax "github.com/stargate/stargate-grpc-go-client/stargate/pkg/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"history-rewinded-lear/models"
+	"log"
+	"os"
+	"sync"
+	"sync/atomic"
+	// "time"
+	// "errors"
 )
 
 var remoteCassandraUri string
@@ -46,7 +47,6 @@ var clientPool = sync.Pool{
 
 		return stargateClient
 	},
-
 }
 
 // Initially, the pool will be having three clients so that it can be used, more will be created if needed
@@ -77,7 +77,7 @@ func init() {
 	go func() {
 		<-synchronizerChan
 		_, err := stargateClient2.ExecuteQuery(&datastax.Query{
-			Cql: `CREATE TABLE IF NOT EXISTS lear.incidents (
+			Cql: `CREATE TABLE IF NOT EXISTS lear.events (
 				day int, month int, year int, summary text, incident_in_detail text,
 				PRIMARY KEY ((day, month), year, summary))
 				WITH CLUSTERING ORDER BY (year DESC, summary ASC);`,
@@ -161,12 +161,12 @@ func (c *CassandraClient) FetchEventsOnThisDay(day uint, month uint) ([]models.I
 
 	for _, row := range resultSet.Rows {
 		incidents = append(incidents, models.Incident{
-			Day: int64(day),
-			Month: int64(month),
-			Year: row.Values[0].GetInt(),
-			Summary: row.Values[1].GetString_(),
+			Day:              int64(day),
+			Month:            int64(month),
+			Year:             row.Values[0].GetInt(),
+			Summary:          row.Values[1].GetString_(),
 			IncidentInDetail: row.Values[2].GetString_(),
-			IncidentType: models.Event,
+			IncidentType:     models.Event,
 		})
 	}
 	return incidents, nil
@@ -200,12 +200,12 @@ func (c *CassandraClient) FetchBirthsOnThisDay(day uint, month uint) ([]models.I
 
 	for _, row := range resultSet.Rows {
 		incidents = append(incidents, models.Incident{
-			Day: int64(day),
-			Month: int64(month),
-			Year: row.Values[0].GetInt(),
-			Summary: row.Values[1].GetString_(),
+			Day:              int64(day),
+			Month:            int64(month),
+			Year:             row.Values[0].GetInt(),
+			Summary:          row.Values[1].GetString_(),
 			IncidentInDetail: row.Values[2].GetString_(),
-			IncidentType: models.Birth,
+			IncidentType:     models.Birth,
 		})
 	}
 	return incidents, nil
@@ -239,12 +239,12 @@ func (c *CassandraClient) FetchDeathsOnThisDay(day uint, month uint) ([]models.I
 
 	for _, row := range resultSet.Rows {
 		incidents = append(incidents, models.Incident{
-			Day: int64(day),
-			Month: int64(month),
-			Year: row.Values[0].GetInt(),
-			Summary: row.Values[1].GetString_(),
+			Day:              int64(day),
+			Month:            int64(month),
+			Year:             row.Values[0].GetInt(),
+			Summary:          row.Values[1].GetString_(),
 			IncidentInDetail: row.Values[2].GetString_(),
-			IncidentType: models.Death,
+			IncidentType:     models.Death,
 		})
 	}
 	return incidents, nil
@@ -278,12 +278,12 @@ func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models
 
 	for _, row := range resultSet.Rows {
 		incidents = append(incidents, models.Incident{
-			Day: int64(day),
-			Month: int64(month),
-			Year: row.Values[0].GetInt(),
-			Summary: row.Values[1].GetString_(),
+			Day:              int64(day),
+			Month:            int64(month),
+			Year:             row.Values[0].GetInt(),
+			Summary:          row.Values[1].GetString_(),
 			IncidentInDetail: row.Values[2].GetString_(),
-			IncidentType: models.Holiday,
+			IncidentType:     models.Holiday,
 		})
 	}
 	return incidents, nil
@@ -294,41 +294,42 @@ func (c *CassandraClient) AddIncident(incident models.Incident) (models.Incident
 	var stargate *client.StargateClient
 
 	func() {
-		stargate = clientPool.Get().(*client.StargateClient)	
-		atomic.AddInt64(&allocatedConnectionsToCassandra, 1)	
+		stargate = clientPool.Get().(*client.StargateClient)
+		atomic.AddInt64(&allocatedConnectionsToCassandra, 1)
 	}()
-	
+
 	defer func() {
 		clientPool.Put(stargate)
-		atomic.AddInt64(&allocatedConnectionsToCassandra, -1)	
+		atomic.AddInt64(&allocatedConnectionsToCassandra, -1)
 	}()
-	
-	switch {
-	case int64(time.Now().Year())<= incident.Year :
-		return models.Incident{}, fmt.Errorf("the event cannot be in the future, the year value is %v", incident.Month)
-	case incident.Month <= 0 || incident.Month > 12:
-		return models.Incident{}, fmt.Errorf("the month cannot be less than 1 as it has the value %v", incident.Month)
-	case incident.Day <= 0 || incident.Month > 31:
-		return models.Incident{}, fmt.Errorf("the day cannot be less than 1 as it has the value %v", incident.Day)
-	case incident.Summary == "":
-		return models.Incident{}, errors.New("the incident summary cannot be empty")
-	case incident.IncidentInDetail == "":
-		return models.Incident{}, errors.New("the incident summary cannot be empty")
-	case incident.IncidentType != models.Event || incident.IncidentType != models.Birth ||incident.IncidentType != models.Death || incident.IncidentType != models.Holiday :
-		return models.Incident{}, errors.New("unknown incident type")
-	default:
-		break
-	}
-	_, err := stargate.ExecuteQuery(&datastax.Query{
-		Cql: "INSERT INTO lear.incidents (day, month, year , summary , incident_in_detail ) VALUES ( ?, ?, ?, ?, ? );",
+
+	// switch {
+	// case int64(time.Now().Year()) < incident.Year:
+	// 	return models.Incident{}, fmt.Errorf("the event cannot be in the future, the year value is %v", incident.Month)
+	// case incident.Month <= 0 || incident.Month > 12:
+	// 	return models.Incident{}, fmt.Errorf("the month cannot be less than 1 as it has the value %v", incident.Month)
+	// case incident.Day <= 0 || incident.Day > 31:
+	// 	return models.Incident{}, fmt.Errorf("the day cannot be less than 1 as it has the value %v", incident.Day)
+	// case incident.Summary == "":
+	// 	return models.Incident{}, errors.New("the incident summary cannot be empty")
+	// case incident.IncidentInDetail == "":
+	// 	return models.Incident{}, errors.New("the incident in detail cannot be empty")
+	// case incident.IncidentType != models.Event || incident.IncidentType != models.Birth || incident.IncidentType != models.Death || incident.IncidentType != models.Holiday:
+	// 	return models.Incident{}, errors.New("unknown incident type")
+	// }
+
+	CqlInsertStatement := fmt.Sprintf(`INSERT INTO lear.%ss (day, month, year , summary , incident_in_detail ) VALUES ( ?, ?, ?, ?, ? );`, &incident.IncidentType)
+
+	_, err := stargate.ExecuteQueryWithContext(&datastax.Query{
+		Cql: CqlInsertStatement,
 		Values: &datastax.Values{Values: []*datastax.Value{
 			{Inner: &datastax.Value_Int{Int: int64(incident.Day)}},
 			{Inner: &datastax.Value_Int{Int: int64(incident.Month)}},
 			{Inner: &datastax.Value_Int{Int: int64(incident.Year)}},
-			{Inner: &datastax.Value_String_{String_:incident.Summary}},
-			{Inner: &datastax.Value_String_{String_:incident.IncidentInDetail}},
+			{Inner: &datastax.Value_String_{String_: incident.Summary}},
+			{Inner: &datastax.Value_String_{String_: incident.IncidentInDetail}},
 		}},
-	})
+	}, context.Background())
 	if err != nil {
 		log.Fatalf("error, unable to insert incident into its table, reason: %v\n", err.Error())
 	}

@@ -15,13 +15,13 @@ const (
 func (iT IncidentType) String() string {
 	switch iT {
 	case Event:
-		return "Event"	
+		return "event"
 	case Birth:
-		return "Birth"
+		return "birth"
 	case Death:
-		return "Death"
+		return "death"
 	case Holiday:
-		return "Holiday"
+		return "holiday"
 	default:
 		return ""
 	}
@@ -31,11 +31,11 @@ type Incident struct {
 	Summary          string
 	IncidentType     IncidentType
 	IncidentInDetail string
-	Day int
-	Month int
-	Year             int
+	Day              int64
+	Month            int64
+	Year             int64
 }
 
 func (i *Incident) String() string {
-	return fmt.Sprintf("On this day, %d-%d-%d, %s\n", i.Day, i.Month, i.Year, i.Summary)	
+	return fmt.Sprintf("On this day, %d-%d-%d, %s\n", i.Day, i.Month, i.Year, i.Summary)
 }

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"github.com/joho/godotenv"
-	"google.golang.org/grpc"
 	_ "history-rewinded-lear/cassandra"
 	"history-rewinded-lear/lear"
 	"history-rewinded-regan/pb"
 	"log"
 	"net"
+	"github.com/joho/godotenv"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -15,6 +15,7 @@ const (
 )
 
 func main() {
+
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("Starting Lear...")
 
@@ -22,7 +23,7 @@ func main() {
 
 	king_lear := lear.New()
 
-	lis, err := net.Listen("tcp", address)
+	lis, err := net.Listen("tcp", address)	
 	if err != nil {
 		log.Fatalf("failed to listen to port %v, reason: %v", address, err.Error())
 	}
@@ -30,12 +31,9 @@ func main() {
 	s := grpc.NewServer()
 	pb.RegisterLearServer(s, &king_lear)
 
-	s.Serve(lis)
+	err = s.Serve(lis)
 	if err != nil {
 		log.Fatalf("failed to start gRPC server, reason: %v\n", err.Error())
 	}
-
-
-	log.Println("successfully started gRPC server")
 
 }

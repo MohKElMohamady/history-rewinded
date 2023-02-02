@@ -27,32 +27,32 @@ func New() lear {
 
 func (l *lear) FetchAllIncidents() {
 	incidentsSynchronizer := sync.WaitGroup{}
-	eventsChannel := make(chan []*models.Incident)
-	birthsChannel := make(chan []*models.Incident)
-	deathsChannel := make(chan []*models.Incident)
-	holidaysChannel := make(chan []*models.Incident)
+	// eventsChannel := make(chan []*models.Incident)
+	// birthsChannel := make(chan []*models.Incident)
+	// deathsChannel := make(chan []*models.Incident)
+	// holidaysChannel := make(chan []*models.Incident)
 
 	incidentsSynchronizer.Add(1)
 	go func() {
-		l.fetchAllIncidentsOfType(eventsChannel, models.Event)
+		l.fetchAllIncidentsOfType(models.Event)
 		incidentsSynchronizer.Done()
 	}()
 
 	incidentsSynchronizer.Add(1)
 	go func() {
-		l.fetchAllIncidentsOfType(birthsChannel, models.Birth)
+		l.fetchAllIncidentsOfType(models.Birth)
 		incidentsSynchronizer.Done()
 	}()
 
 	incidentsSynchronizer.Add(1)
 	go func() {
-		l.fetchAllIncidentsOfType(deathsChannel, models.Death)
+		l.fetchAllIncidentsOfType(models.Death)
 		incidentsSynchronizer.Done()
 	}()
 
 	incidentsSynchronizer.Add(1)
 	go func() {
-		l.fetchAllIncidentsOfType(holidaysChannel, models.Holiday)
+		l.fetchAllIncidentsOfType(models.Holiday)
 		incidentsSynchronizer.Done()
 	}()
 
@@ -106,7 +106,7 @@ func (l *lear) fetchAllEvents(fanInEventsChannel chan<- []*models.Incident) {
 /*
  * Using the Fan-In pattern
  */
-func (l *lear) fetchAllIncidentsOfType(fanInEventsChannel chan<- []*models.Incident, incidentType models.IncidentType) {
+func (l *lear) fetchAllIncidentsOfType(incidentType models.IncidentType) {
 
 	// This WaitGroup is responsible for making sure that the 365 days of the years' events are fetched
 	waitGroupEvents := sync.WaitGroup{}
@@ -126,7 +126,6 @@ func (l *lear) fetchAllIncidentsOfType(fanInEventsChannel chan<- []*models.Incid
 		go wikipedia.FetchIncidentFromWikipedia(incidentsChannel, incidentType, uint(dayOfYear))
 
 		go func(incidentsChannel chan []*models.Incident) {
-			defer waitGroupEvents.Done()
 			for incidents := range incidentsChannel {
 				for _, incident := range incidents {
 					atomic.AddInt64(&totalEvents, 1)
@@ -135,16 +134,16 @@ func (l *lear) fetchAllIncidentsOfType(fanInEventsChannel chan<- []*models.Incid
 					log.Println(incident)
 				}
 				atomic.AddInt64(&totalEvents, 1)
-				fanInEventsChannel <- incidents
+				// fanInEventsChannel <- incidents
 			}
+			waitGroupEvents.Done()
 		}(incidentsChannel)
-
 	}
 
-	defer close(fanInEventsChannel)
 	waitGroupEvents.Wait()
 	//TODO: Calculate the hash out of all the events periodically every day and compare them with the database to know if the API has updated its information
 	log.Printf("The total number of fetched events from the On This Day Wikipedia API is %d\n", totalEvents)
+	// close(fanInEventsChannel)
 }
 
 func (l *lear) FetchIncidentsOn(*pb.FetchIncidentRequest, pb.Lear_FetchIncidentsOnServer) error {

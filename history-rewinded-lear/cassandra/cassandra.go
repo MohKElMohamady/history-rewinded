@@ -134,10 +134,13 @@ type CassandraClient struct {
 }
 
 func (c *CassandraClient) FetchEventsOnThisDay(day uint, month uint) ([]models.Incident, error) {
+
 	stargateClient := clientPool.Get().(*client.StargateClient)
 	defer clientPool.Put(stargateClient)
+
+	log.Printf("attempting to select the holidays on %d-%d\n", day, month)
 	fetchIncidentQuery := &datastax.Query{
-		Cql: "SELECT year, summary, incident_in_summary FROM lear.incidents WHERE day = ? AND month = ?",
+		Cql: "SELECT year, summary, incident_in_detail FROM lear.events WHERE day = ? AND month = ?",
 		Values: &datastax.Values{
 			Values: []*datastax.Value{
 				{
@@ -154,6 +157,8 @@ func (c *CassandraClient) FetchEventsOnThisDay(day uint, month uint) ([]models.I
 	if err != nil {
 		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
+
+	log.Printf("fetching the events for %d-%d was successful having in total %d events on that day", day, month, len(resp.GetResultSet().Rows))
 
 	incidents := []models.Incident{}
 
@@ -173,10 +178,13 @@ func (c *CassandraClient) FetchEventsOnThisDay(day uint, month uint) ([]models.I
 }
 
 func (c *CassandraClient) FetchBirthsOnThisDay(day uint, month uint) ([]models.Incident, error) {
+
 	stargateClient := clientPool.Get().(*client.StargateClient)
 	defer clientPool.Put(stargateClient)
+
+	log.Printf("attempting to select the holidays on %d-%d\n", day, month)
 	fetchIncidentQuery := &datastax.Query{
-		Cql: "SELECT year, summary, incident_in_summary FROM lear.births WHERE day = ? AND month = ?",
+		Cql: "SELECT year, summary, incident_in_detail FROM lear.births WHERE day = ? AND month = ?",
 		Values: &datastax.Values{
 			Values: []*datastax.Value{
 				{
@@ -193,6 +201,8 @@ func (c *CassandraClient) FetchBirthsOnThisDay(day uint, month uint) ([]models.I
 	if err != nil {
 		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
+
+	log.Printf("fetching the events for %d-%d was successful having in total %d events on that day", day, month, len(resp.GetResultSet().Rows))
 
 	incidents := []models.Incident{}
 
@@ -212,10 +222,13 @@ func (c *CassandraClient) FetchBirthsOnThisDay(day uint, month uint) ([]models.I
 }
 
 func (c *CassandraClient) FetchDeathsOnThisDay(day uint, month uint) ([]models.Incident, error) {
+	
 	stargateClient := clientPool.Get().(*client.StargateClient)
 	defer clientPool.Put(stargateClient)
+
+	log.Printf("attempting to select the holidays on %d-%d\n", day, month)
 	fetchIncidentQuery := &datastax.Query{
-		Cql: "SELECT year, summary, incident_in_summary FROM lear.deaths WHERE day = ? AND month = ?",
+		Cql: "SELECT year, summary, incident_in_detail FROM lear.deaths WHERE day = ? AND month = ?",
 		Values: &datastax.Values{
 			Values: []*datastax.Value{
 				{
@@ -232,6 +245,8 @@ func (c *CassandraClient) FetchDeathsOnThisDay(day uint, month uint) ([]models.I
 	if err != nil {
 		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
+
+	log.Printf("fetching the events for %d-%d was successful having in total %d events on that day", day, month, len(resp.GetResultSet().Rows))
 
 	incidents := []models.Incident{}
 
@@ -253,8 +268,10 @@ func (c *CassandraClient) FetchDeathsOnThisDay(day uint, month uint) ([]models.I
 func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models.Incident, error) {
 	stargateClient := clientPool.Get().(*client.StargateClient)
 	defer clientPool.Put(stargateClient)
+
+	log.Printf("attempting to select the holidays on %d-%d\n", day, month)
 	fetchIncidentQuery := &datastax.Query{
-		Cql: "SELECT year, summary, incident_in_summary FROM lear.holidays WHERE day = ? AND month = ?",
+		Cql: "SELECT year, summary, incident_in_detail FROM lear.holidays WHERE day = ? AND month = ?",
 		Values: &datastax.Values{
 			Values: []*datastax.Value{
 				{
@@ -272,6 +289,7 @@ func (c *CassandraClient) FetchHolidaysOnThisDay(day uint, month uint) ([]models
 		fmt.Printf("failed to fetch results from remote cassandra instance, reason %s\n", err.Error())
 	}
 
+	log.Printf("fetching the events for %d-%d was successful having in total %d events on that day", day, month, len(resp.GetResultSet().Rows))
 	incidents := []models.Incident{}
 
 	resultSet := resp.GetResultSet()

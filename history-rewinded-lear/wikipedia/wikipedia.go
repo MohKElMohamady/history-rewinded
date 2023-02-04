@@ -25,9 +25,8 @@ func init() {
 	httpClientsPool.Put(&http.Client{})
 }
 
-func FetchIncidentFromWikipedia(incidentChannel chan<- []*models.Incident, incidentType models.IncidentType, dayOfYear uint) {
+func FetchIncidentFromWikipedia(incidentChannel chan<- []models.Incident, incidentType models.IncidentType, dayOfYear uint) {
 
-	defer close(incidentChannel)
 
 	// https://stackoverflow.com/questions/62018471/why-does-golang-strings-builder-implements-string-like-this
 	urlBuilder := strings.Builder{}
@@ -69,16 +68,19 @@ func FetchIncidentFromWikipedia(incidentChannel chan<- []*models.Incident, incid
 	}
 
 	parsedIncidents := ParseWikipediaResponseToIncidents(string(wikipediaBytesResponse), day, month, incidentType)
-	log.Println(parsedIncidents)
 
 	incidentChannel <- parsedIncidents
 
+	
+	close(incidentChannel)
+
 	log.Println("Successfully fetched and parsed the event from Wikipedia and sent it on the channel, exiting")
+
 }
 
-func ParseWikipediaResponseToIncidents(jsonBlob string, day, month uint, incidentType models.IncidentType) []*models.Incident {
+func ParseWikipediaResponseToIncidents(jsonBlob string, day, month uint, incidentType models.IncidentType) []models.Incident {
 
-	var incidents []*models.Incident
+	var incidents []models.Incident
 
 	// https://mholt.github.io/json-to-go/
 	parsedJsonIncidents := gjson.Parse(jsonBlob).Array()[0].Get(incidentType.String() + "s").Array()
@@ -88,7 +90,7 @@ func ParseWikipediaResponseToIncidents(jsonBlob string, day, month uint, inciden
 		incidentInDetail := r.Get("year").Str
 		incidentYear := r.Get("year").Int()
 
-		incident := &models.Incident{
+		incident := models.Incident{
 			Day:              int64(day),
 			Month:            int64(month),
 			Year:             incidentYear,

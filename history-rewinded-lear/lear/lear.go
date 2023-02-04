@@ -59,14 +59,14 @@ func (l *lear) FetchAllIncidents() {
 	incidentsSynchronizer.Wait()
 }
 
-func (l *lear) fetchAllEvents(fanInEventsChannel chan<- []*models.Incident) {
+func (l *lear) fetchAllEvents(fanInEventsChannel chan<- []models.Incident) {
 
 	// This WaitGroup is responsible for making sure that the 365 days of the years' events are fetched
 	waitGroupEvents := sync.WaitGroup{}
 	// One channel for every day in the year
-	threeHundredSixtyFiveChannels := [365]chan []*models.Incident{}
+	threeHundredSixtyFiveChannels := [365]chan []models.Incident{}
 	for i := 0; i < 365; i++ {
-		threeHundredSixtyFiveChannels[i] = make(chan []*models.Incident)
+		threeHundredSixtyFiveChannels[i] = make(chan []models.Incident)
 	}
 	// Add method on the WaitGroup must be outside spawning go routines to prevent race conditions
 	waitGroupEvents.Add(len(threeHundredSixtyFiveChannels))
@@ -78,13 +78,13 @@ func (l *lear) fetchAllEvents(fanInEventsChannel chan<- []*models.Incident) {
 
 		go wikipedia.FetchIncidentFromWikipedia(incidentsChannel, models.Event, uint(dayOfYear))
 
-		go func(incidentsChannel chan []*models.Incident) {
+		go func(incidentsChannel chan []models.Incident) {
 			defer waitGroupEvents.Done()
 			for incidents := range incidentsChannel {
 				for _, incident := range incidents {
 					atomic.AddInt64(&totalEvents, 1)
 					//It is faster to persist the incident right after parsing it, rather than waiting for it to be done by the fanning in channel
-					l.c.AddIncident(*incident)
+					l.c.AddIncident(incident)
 					log.Println(incident)
 				}
 				atomic.AddInt64(&totalEvents, 1)
@@ -111,9 +111,9 @@ func (l *lear) fetchAllIncidentsOfType(incidentType models.IncidentType) {
 	// This WaitGroup is responsible for making sure that the 365 days of the years' events are fetched
 	waitGroupEvents := sync.WaitGroup{}
 	// One channel for every day in the year
-	threeHundredSixtyFiveChannels := [365]chan []*models.Incident{}
+	threeHundredSixtyFiveChannels := [365]chan []models.Incident{}
 	for i := 0; i < 365; i++ {
-		threeHundredSixtyFiveChannels[i] = make(chan []*models.Incident)
+		threeHundredSixtyFiveChannels[i] = make(chan []models.Incident)
 	}
 	// Add method on the WaitGroup must be outside spawning go routines to prevent race conditions
 	waitGroupEvents.Add(len(threeHundredSixtyFiveChannels))
@@ -125,12 +125,12 @@ func (l *lear) fetchAllIncidentsOfType(incidentType models.IncidentType) {
 
 		go wikipedia.FetchIncidentFromWikipedia(incidentsChannel, incidentType, uint(dayOfYear))
 
-		go func(incidentsChannel chan []*models.Incident) {
+		go func(incidentsChannel chan []models.Incident) {
 			for incidents := range incidentsChannel {
 				for _, incident := range incidents {
 					atomic.AddInt64(&totalEvents, 1)
 					//It is faster to persist the incident right after parsing it, rather than waiting for it to be done by the fanning in channel
-					l.c.AddIncident(*incident)
+					l.c.AddIncident(incident)
 					log.Println(incident)
 				}
 				atomic.AddInt64(&totalEvents, 1)
